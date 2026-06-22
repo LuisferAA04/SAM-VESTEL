@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAM - Panel Vestel</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, sans-serif; background: #111b21; height: 100vh; overflow: hidden; }
+        .container { display: flex; height: 100vh; }
+
+        /* Sidebar */
+        .sidebar { width: 380px; background: #111b21; border-right: 1px solid #2a3942; display: flex; flex-direction: column; }
+        .sidebar-header { background: #202c33; padding: 16px; color: #e9edef; font-size: 16px; font-weight: 500; display: flex; justify-content: space-between; align-items: center; }
+        .stats-bar { display: flex; gap: 8px; padding: 10px 16px; background: #0b141a; }
+        .stat-pill { flex: 1; background: #202c33; border-radius: 8px; padding: 8px; text-align: center; }
+        .stat-num { font-size: 18px; color: #00a884; font-weight: 700; }
+        .stat-label { font-size: 11px; color: #8696a0; text-transform: uppercase; }
+        .search-box { padding: 8px 16px; background: #111b21; }
+        .search-input { width: 100%; padding: 8px 12px; background: #202c33; border: none; border-radius: 8px; color: #e9edef; font-size: 14px; }
+        .conversations { flex: 1; overflow-y: auto; }
+        .conversation-item { padding: 12px 16px; display: flex; gap: 12px; cursor: pointer; border-bottom: 1px solid #2a3942; }
+        .conversation-item:hover, .conversation-item.active { background: #202c33; }
+        .conversation-avatar { width: 48px; height: 48px; border-radius: 50%; background: #1a4d7a; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; flex-shrink: 0; }
+        .conversation-info { flex: 1; min-width: 0; }
+        .conversation-name { font-size: 15px; color: #e9edef; font-weight: 500; }
+        .conversation-time { font-size: 12px; color: #8696a0; }
+        .conversation-text { font-size: 14px; color: #8696a0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .status-auto { background: #00a884; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+        .status-manual { background: #ffa500; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+        .empty { padding: 30px 16px; color: #8696a0; font-size: 14px; text-align: center; }
+
+        /* Chat Area */
+        .chat-area { flex: 1; display: flex; flex-direction: column; background: #0b141a; }
+        .chat-header { background: #202c33; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2a3942; }
+        .client-name { font-size: 16px; color: #e9edef; font-weight: 500; }
+        .client-status { font-size: 13px; color: #8696a0; }
+        .intervene-btn { background: #00a884; color: white; border: none; padding: 8px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; }
+        .intervene-btn:hover { background: #008f6f; }
+        .intervene-btn.active { background: #ffa500; }
+
+        .chat-messages { flex: 1; overflow-y: auto; padding: 20px; }
+        .message { margin-bottom: 12px; display: flex; }
+        .message.left { justify-content: flex-start; }
+        .message.right { justify-content: flex-end; }
+        .message-bubble { max-width: 65%; padding: 8px 12px; border-radius: 8px; font-size: 14px; line-height: 1.5; word-wrap: break-word; }
+        .message.left .message-bubble { background: #202c33; color: #e9edef; border-radius: 0 8px 8px 8px; }
+        .message.right .message-bubble { background: #005c4b; color: #e9edef; border-radius: 8px 0 8px 8px; }
+        .message-time { font-size: 11px; color: #8696a0; margin-top: 2px; }
+        .message-label { font-size: 11px; margin-bottom: 4px; }
+        .label-sam { color: #00a884; }
+        .label-agente { color: #ffa500; }
+
+        .chat-input-area { background: #202c33; padding: 12px 16px; display: flex; gap: 8px; }
+        .chat-input { flex: 1; background: #2a3942; border: none; border-radius: 8px; padding: 10px 16px; color: #e9edef; font-size: 14px; }
+        .send-btn { background: #00a884; color: white; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 18px; }
+        .send-btn:disabled { background: #2a3942; cursor: not-allowed; }
+        .placeholder-center { flex: 1; display: flex; align-items: center; justify-content: center; color: #8696a0; font-size: 15px; }
+
+        /* Details Panel */
+        .details-panel { width: 320px; background: #111b21; border-left: 1px solid #2a3942; padding: 20px; overflow-y: auto; }
+        .details-avatar { width: 80px; height: 80px; border-radius: 50%; background: #1a4d7a; display: flex; align-items: center; justify-content: center; color: white; font-size: 32px; font-weight: 600; margin: 0 auto 12px; }
+        .details-name { font-size: 18px; color: #e9edef; text-align: center; margin-bottom: 4px; }
+        .details-phone { font-size: 14px; color: #8696a0; text-align: center; margin-bottom: 24px; }
+        .details-section-title { font-size: 13px; color: #00a884; font-weight: 600; margin-bottom: 12px; margin-top: 16px; text-transform: uppercase; }
+        .details-item { margin-bottom: 12px; }
+        .details-label { font-size: 13px; color: #8696a0; margin-bottom: 4px; }
+        .details-value { font-size: 14px; color: #e9edef; }
+        .alert-box { background: #2a1810; border: 1px solid #ff4444; border-radius: 8px; padding: 12px; margin-bottom: 16px; }
+        .alert-title { font-size: 13px; color: #ff4444; font-weight: 600; margin-bottom: 6px; }
+        .alert-text { font-size: 13px; color: #e9edef; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <span>🤖 SAM - Vestel</span>
+                <span id="liveDot" style="font-size:11px;color:#00a884;">● en vivo</span>
+            </div>
+            <div class="stats-bar">
+                <div class="stat-pill"><div class="stat-num" id="statHoy">–</div><div class="stat-label">Hoy</div></div>
+                <div class="stat-pill"><div class="stat-num" id="statSemana">–</div><div class="stat-label">Semana</div></div>
+                <div class="stat-pill"><div class="stat-num" id="statMes">–</div><div class="stat-label">Mes</div></div>
+            </div>
+            <div class="search-box">
+                <input type="text" class="search-input" id="searchInput" placeholder="Buscar conversación..." oninput="renderConversations()">
+            </div>
+            <div class="conversations" id="conversationsList">
+                <div class="empty">Cargando conversaciones...</div>
+            </div>
+        </div>
+
+        <div class="chat-area">
+            <div class="chat-header" id="chatHeader" style="display:none;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div class="conversation-avatar" id="headerAvatar" style="width: 40px; height: 40px; font-size: 14px;"></div>
+                    <div>
+                        <div class="client-name" id="headerName"></div>
+                        <div class="client-status" id="status"></div>
+                    </div>
+                </div>
+                <button class="intervene-btn" id="interveneBtn" onclick="toggleIntervene()">✋ INTERVENIR</button>
+            </div>
+
+            <div class="chat-messages" id="chatMessages">
+                <div class="placeholder-center">Selecciona una conversación para ver los mensajes</div>
+            </div>
+
+            <div class="chat-input-area" id="inputArea" style="display:none;">
+                <input type="text" class="chat-input" id="chatInput" placeholder="SAM está respondiendo automáticamente..." disabled
+                       onkeydown="if(event.key==='Enter')sendMessage()">
+                <button class="send-btn" id="sendBtn" disabled onclick="sendMessage()">➤</button>
+            </div>
+        </div>
+
+        <div class="details-panel" id="detailsPanel">
+            <div class="empty">Sin conversación seleccionada</div>
+        </div>
+    </div>
+
+    <script>
+        let conversaciones = [];
+        let casos = [];
+        let convActivaId = null;
+        let isManualMode = false;
+
+        function esc(s) {
+            if (s === null || s === undefined) return '';
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+        function iniciales(nombre, telefono) {
+            if (nombre && nombre.trim()) {
+                const p = nombre.trim().split(/\s+/);
+                return (p[0][0] + (p[1] ? p[1][0] : '')).toUpperCase();
+            }
+            return (telefono || '?').slice(-2);
+        }
+        function hora(fecha) {
+            if (!fecha) return '';
+            const d = new Date(fecha.replace(' ', 'T') + 'Z');
+            if (isNaN(d)) return '';
+            return d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        async function cargarStats() {
+            try {
+                const r = await fetch('/api/estadisticas'); const s = await r.json();
+                statHoy.textContent = s.hoy ?? 0;
+                statSemana.textContent = s.semana ?? 0;
+                statMes.textContent = s.mes ?? 0;
+            } catch (e) {}
+        }
+
+        async function cargarConversaciones() {
+            try {
+                const r = await fetch('/api/conversaciones'); const d = await r.json();
+                conversaciones = d.conversaciones || [];
+                const rc = await fetch('/api/casos'); casos = (await rc.json()).casos || [];
+                renderConversations();
+                if (convActivaId) renderDetails();
+            } catch (e) { liveDot.textContent = '● desconectado'; liveDot.style.color = '#ff4444'; return; }
+            liveDot.textContent = '● en vivo'; liveDot.style.color = '#00a884';
+        }
+
+        function renderConversations() {
+            const filtro = (searchInput.value || '').toLowerCase();
+            const lista = conversaciones.filter(c =>
+                (c.nombre_cliente || '').toLowerCase().includes(filtro) ||
+                (c.telefono || '').includes(filtro));
+            const cont = document.getElementById('conversationsList');
+            if (!lista.length) { cont.innerHTML = '<div class="empty">No hay conversaciones</div>'; return; }
+            cont.innerHTML = lista.map(c => `
+                <div class="conversation-item ${c.id === convActivaId ? 'active' : ''}" onclick="abrirConversacion(${c.id})">
+                    <div class="conversation-avatar">${esc(iniciales(c.nombre_cliente, c.telefono))}</div>
+                    <div class="conversation-info">
+                        <div style="display:flex;justify-content:space-between;">
+                            <span class="conversation-name">${esc(c.nombre_cliente || c.telefono)}</span>
+                            <span class="conversation-time">${hora(c.fecha_ultimo_mensaje)}</span>
+                        </div>
+                        <div><span class="${c.modo === 'manual' ? 'status-manual' : 'status-auto'}">${c.modo === 'manual' ? 'MANUAL' : 'AUTO'}</span>
+                        <span class="conversation-text">${esc(c.ultimo_mensaje || '')}</span></div>
+                    </div>
+                </div>`).join('');
+        }
+
+        async function abrirConversacion(id) {
+            convActivaId = id;
+            const c = conversaciones.find(x => x.id === id);
+            isManualMode = c && c.modo === 'manual';
+            chatHeader.style.display = 'flex';
+            inputArea.style.display = 'flex';
+            headerAvatar.textContent = iniciales(c.nombre_cliente, c.telefono);
+            headerName.textContent = c.nombre_cliente || c.telefono;
+            actualizarModoUI();
+            renderConversations();
+            renderDetails();
+            await cargarMensajes();
+        }
+
+        async function cargarMensajes() {
+            if (!convActivaId) return;
+            try {
+                const r = await fetch(`/api/conversacion/${convActivaId}/mensajes`);
+                const d = await r.json();
+                const cont = document.getElementById('chatMessages');
+                const abajo = cont.scrollHeight - cont.scrollTop - cont.clientHeight < 80;
+                cont.innerHTML = (d.mensajes || []).map(m => {
+                    const esCliente = m.remitente === 'usuario';
+                    const lado = esCliente ? 'left' : 'right';
+                    let label = '';
+                    if (m.remitente === 'sam') label = '<div class="message-label label-sam">🤖 SAM</div>';
+                    else if (m.remitente === 'agente') label = '<div class="message-label label-agente">👤 Agente</div>';
+                    return `<div class="message ${lado}"><div style="max-width:65%;">${label}
+                        <div class="message-bubble">${esc(m.contenido)}</div>
+                        <div class="message-time" style="text-align:${esCliente?'left':'right'};">${hora(m.fecha)}</div></div></div>`;
+                }).join('');
+                if (abajo) cont.scrollTop = cont.scrollHeight;
+            } catch (e) {}
+        }
+
+        function renderDetails() {
+            const c = conversaciones.find(x => x.id === convActivaId);
+            if (!c) return;
+            const casoCli = casos.find(k => k.telefono === c.telefono);
+            const alertas = casos.filter(k => k.telefono === c.telefono && k.requiere_escalamiento);
+            let html = `
+                <div class="details-avatar">${esc(iniciales(c.nombre_cliente, c.telefono))}</div>
+                <div class="details-name">${esc(c.nombre_cliente || 'Sin validar')}</div>
+                <div class="details-phone">${esc(c.telefono)}</div>`;
+            if (alertas.length) {
+                html += `<div class="details-section-title">🔔 Alertas Activas</div>`;
+                alertas.forEach(a => {
+                    html += `<div class="alert-box"><div class="alert-title">⚠️ ${esc(a.tipo_escalamiento || a.tipo)}</div>
+                        <div class="alert-text">${esc(a.descripcion || '')}<br>Radicado ${esc(a.radicado)}</div></div>`;
+                });
+            }
+            html += `<div class="details-section-title">📋 Info del Cliente</div>
+                <div class="details-item"><div class="details-label">Cédula</div><div class="details-value">${esc(c.cedula || 'No validada')}</div></div>`;
+            if (casoCli) {
+                html += `<div class="details-section-title">🎫 Último Caso</div>
+                    <div class="details-item"><div class="details-label">Radicado</div><div class="details-value">${esc(casoCli.radicado)}</div></div>
+                    <div class="details-item"><div class="details-label">Tipo</div><div class="details-value">${esc(casoCli.tipo)}</div></div>
+                    <div class="details-item"><div class="details-label">Estado</div><div class="details-value">${esc(casoCli.estado)}</div></div>`;
+            }
+            document.getElementById('detailsPanel').innerHTML = html;
+        }
+
+        function actualizarModoUI() {
+            const btn = interveneBtn, input = chatInput, sendBtn = document.getElementById('sendBtn');
+            if (isManualMode) {
+                btn.textContent = '🤖 VOLVER A AUTO'; btn.classList.add('active');
+                input.disabled = false; sendBtn.disabled = false;
+                input.placeholder = 'Escribe tu mensaje...';
+                status.textContent = '👤 Modo manual (agente)';
+            } else {
+                btn.textContent = '✋ INTERVENIR'; btn.classList.remove('active');
+                input.disabled = true; sendBtn.disabled = true;
+                input.placeholder = 'SAM está respondiendo automáticamente...';
+                status.textContent = '🤖 SAM respondiendo automáticamente';
+            }
+        }
+
+        async function toggleIntervene() {
+            if (!convActivaId) return;
+            isManualMode = !isManualMode;
+            const ruta = isManualMode ? 'intervenir' : 'automatico';
+            try { await fetch(`/api/conversacion/${convActivaId}/${ruta}`, { method: 'POST' }); } catch (e) {}
+            const c = conversaciones.find(x => x.id === convActivaId);
+            if (c) c.modo = isManualMode ? 'manual' : 'automatico';
+            actualizarModoUI();
+            if (isManualMode) chatInput.focus();
+        }
+
+        async function sendMessage() {
+            const input = chatInput;
+            const mensaje = input.value.trim();
+            if (!mensaje || !isManualMode || !convActivaId) return;
+            input.value = '';
+            try {
+                await fetch(`/api/conversacion/${convActivaId}/enviar`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mensaje })
+                });
+            } catch (e) {}
+            await cargarMensajes();
+        }
+
+        // Carga inicial + polling (tiempo real)
+        cargarStats(); cargarConversaciones();
+        setInterval(cargarConversaciones, 5000);
+        setInterval(cargarStats, 15000);
+        setInterval(() => { if (convActivaId) cargarMensajes(); }, 3000);
+    </script>
+</body>
+</html>

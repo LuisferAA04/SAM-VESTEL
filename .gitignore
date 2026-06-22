@@ -1,0 +1,24 @@
+# Secretos y configuración local
+.env
+.env.local
+
+# Base de datos (datos personales de clientes - NO versionar)
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Logs
+*.log
+
+# Sistema
+.DS_Store
+Thumbs.db
