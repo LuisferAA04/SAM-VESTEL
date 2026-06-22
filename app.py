@@ -414,9 +414,15 @@ def _manejar_confirmacion_resuelto(telefono, mensaje, conv):
     """
     mensaje_lower = mensaje.lower().strip()
 
-    # Palabras positivas = servicio funciona
-    palabras_positivas = ['si', 'sí', 'yes', 'ok', 'okay', 'funciona', 'funciono',
-                         'perfecto', 'excelente', 'bien', 'bien!', 'ya', 'listo',
+    # Palabras de revisión = cliente va a verificar, NO responde aún (CHEQUEAR PRIMERO)
+    palabras_revision = ['momento', 'reviso', 'verifico', 'valido', 'válido',
+                        'verificar', 'chequeo', 'chequear', 'revisar', 'déjame ver',
+                        'espera', 'espere', 'un momento', 'un segundo', 'un minuto',
+                        'ya verifico', 'ya reviso', 'ya valido', 'ya chequeo']
+
+    # Palabras positivas = servicio funciona (SOLO SI NO ES REVISIÓN)
+    palabras_positivas = ['si', 'sí', 'yes', 'funciona', 'funciono',
+                         'perfecto', 'excelente', 'bien', 'bien!', 'listo',
                          'claro', 'claro que si', 'claro que sí', 'que bueno', 'qué bueno']
 
     # Palabras negativas = servicio NO funciona
@@ -425,14 +431,11 @@ def _manejar_confirmacion_resuelto(telefono, mensaje, conv):
                           'falla', 'fallo', 'malo', 'mal', 'sin', 'nada',
                           'sigue sin', 'no funciona', 'no funciono', 'no sirve']
 
-    # Palabras de revisión = cliente va a verificar, NO responde aún
-    palabras_revision = ['momento', 'reviso', 'reviso', 'valido', 'válido', 'verifico',
-                        'verificar', 'chequeo', 'chequear', 'revisar', 'déjame ver',
-                        'espera', 'espere', 'un momento', 'un segundo', 'un minuto']
-
-    es_positivo = any(p in mensaje_lower for p in palabras_positivas)
-    es_negativo = any(p in mensaje_lower for p in palabras_negativas)
     es_revision = any(p in mensaje_lower for p in palabras_revision)
+    es_negativo = any(p in mensaje_lower for p in palabras_negativas)
+    # Solo contar como positivo si NO es revisión y NO es negativo
+    es_positivo = (not es_revision and not es_negativo and
+                   any(p in mensaje_lower for p in palabras_positivas))
 
     # Si está diciendo que va a revisar, esperar confirmación real
     if es_revision and not es_positivo and not es_negativo:
