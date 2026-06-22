@@ -83,10 +83,10 @@ def enviar_alerta(tipo, radicado, nombre_cliente, cedula, telefono, detalle):
         f"<i>¿Qué acción tomar?</i>"
     )
 
-    # Botones inline — callback_data lleva: ACCION|RADICADO|TELEFONO|CEDULA|NOMBRE
-    # Estructura: TECNICO|VES-1234|3001234567|1234567890|Juan Perez
-    callback_tecnico = f"TECNICO|{radicado}|{telefono}|{cedula}|{nombre_cliente}".replace(" ", "_")
-    callback_resuelto = f"RESUELTO|{radicado}|{telefono}|{cedula}|{nombre_cliente}".replace(" ", "_")
+    # Botones inline — callback_data solo lleva: ACCION|RADICADO|TELEFONO
+    # Los datos del cliente se recuperan desde la BD usando el radicado
+    callback_tecnico = f"TECNICO|{radicado}|{telefono}"
+    callback_resuelto = f"RESUELTO|{radicado}|{telefono}"
 
     inline_keyboard = {
         "inline_keyboard": [

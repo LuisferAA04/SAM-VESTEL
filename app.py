@@ -519,17 +519,24 @@ def telegram_webhook():
 
             from telegram_alerts import editar_mensaje_accion, responder_callback
 
-            # Formato callback_data: "ACCION|RADICADO|TELEFONO|CEDULA|NOMBRE"
+            # Formato callback_data: "ACCION|RADICADO|TELEFONO"
             partes = callback_data.split('|')
-            if len(partes) < 3:
+            if len(partes) != 3:
                 responder_callback(callback_id)
                 return jsonify({'ok': True})
 
             accion = partes[0]
             radicado = partes[1]
             telefono = partes[2]
-            cedula = partes[3] if len(partes) > 3 else 'Pendiente'
-            nombre_cliente = partes[4].replace('_', ' ') if len(partes) > 4 else 'Cliente'
+
+            # Recuperar datos del cliente desde la BD usando el radicado
+            try:
+                caso = db.obtener_caso(radicado)
+                cedula = caso.get('cedula', 'Pendiente') if caso else 'Pendiente'
+                nombre_cliente = caso.get('nombre_cliente', 'Cliente') if caso else 'Cliente'
+            except Exception:
+                cedula = 'Pendiente'
+                nombre_cliente = 'Cliente'
 
             # Confirmar a Telegram que recibimos el callback
             responder_callback(callback_id)
