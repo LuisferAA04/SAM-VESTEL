@@ -364,6 +364,7 @@ FORMATO SALIDA:
                 tipo=alerta_tipo,
                 radicado=radicado,
                 nombre_cliente=nombre or 'Cliente',
+                cedula=cedula or 'Pendiente',
                 telefono=telefono,
                 detalle=descripcion,
             )
@@ -650,10 +651,12 @@ FORMATO SALIDA:
                         from telegram_alerts import enviar_alerta
                         conv = self.db.obtener_conversacion(telefono)
                         nombre_cliente = conv.get('nombre_cliente', 'Cliente') if conv else 'Cliente'
+                        cedula_cliente = conv.get('cedula', 'Pendiente') if conv else 'Pendiente'
                         enviar_alerta(
                             tipo=tipo_escalamiento,
                             radicado=radicado,
                             nombre_cliente=nombre_cliente,
+                            cedula=cedula_cliente,
                             telefono=telefono,
                             detalle=mensaje_usuario
                         )

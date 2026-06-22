@@ -22,7 +22,7 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 
-def enviar_alerta(tipo, radicado, nombre_cliente, telefono, detalle):
+def enviar_alerta(tipo, radicado, nombre_cliente, cedula, telefono, detalle):
     """
     Enviar alerta a Telegram con botones de acción
 
@@ -30,6 +30,7 @@ def enviar_alerta(tipo, radicado, nombre_cliente, telefono, detalle):
         tipo: AFILIACION, COBERTURA, EQUIPO_DAÑADO, PQR, URGENTE, SISTEMAS
         radicado: VES-XXXX
         nombre_cliente: Nombre del cliente
+        cedula: Cédula del cliente
         telefono: Teléfono del cliente
         detalle: Descripción del caso
     """
@@ -68,7 +69,7 @@ def enviar_alerta(tipo, radicado, nombre_cliente, telefono, detalle):
         f"{'─' * 40}\n\n"
         f"<b>👤 CLIENTE</b>\n"
         f"Nombre: {_esc(nombre_cliente)}\n"
-        f"Documento: {_esc(nombre_cliente)}  [Pendiente validación CRM]\n"
+        f"Documento: {_esc(cedula)}\n"
         f"Celular: {_esc(telefono)}\n"
         f"Dirección: [Pendiente CRM]\n"
         f"Barrio: [Pendiente CRM]\n\n"
@@ -82,19 +83,23 @@ def enviar_alerta(tipo, radicado, nombre_cliente, telefono, detalle):
         f"<i>¿Qué acción tomar?</i>"
     )
 
-    # Botones inline — callback_data lleva radicado y telefono separados por |
+    # Botones inline — callback_data lleva: ACCION|RADICADO|TELEFONO|CEDULA|NOMBRE
+    # Estructura: TECNICO|VES-1234|3001234567|1234567890|Juan Perez
+    callback_tecnico = f"TECNICO|{radicado}|{telefono}|{cedula}|{nombre_cliente}".replace(" ", "_")
+    callback_resuelto = f"RESUELTO|{radicado}|{telefono}|{cedula}|{nombre_cliente}".replace(" ", "_")
+
     inline_keyboard = {
         "inline_keyboard": [
             [
                 {
                     "text": "🔧 ENVIAR TÉCNICO",
-                    "callback_data": f"TECNICO|{radicado}|{telefono}"
+                    "callback_data": callback_tecnico
                 }
             ],
             [
                 {
                     "text": "✅ MARCAR RESUELTO",
-                    "callback_data": f"RESUELTO|{radicado}|{telefono}"
+                    "callback_data": callback_resuelto
                 }
             ]
         ]
@@ -124,37 +129,39 @@ def enviar_alerta(tipo, radicado, nombre_cliente, telefono, detalle):
         return False
 
 
-def editar_mensaje_accion(chat_id, message_id, radicado, accion):
+def editar_mensaje_accion(chat_id, message_id, radicado, accion, nombre_cliente='Cliente', cedula='Pendiente', telefono=''):
     """
-    Edita el mensaje en Telegram agregando la acción tomada al final
-    y elimina los botones. Mantiene toda la información original del reclamo.
+    Edita el mensaje en Telegram mostrando toda la información del reclamo + la acción ejecutada.
+    Preserva todos los datos del cliente para mantener un registro completo.
     """
     if not TELEGRAM_BOT_TOKEN:
         return False
 
-    # Obtener el mensaje actual para preservar su contenido
-    url_get = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getMessage"
-    try:
-        resp_get = requests.post(url_get, json={'chat_id': chat_id, 'message_id': message_id}, timeout=10)
-        mensaje_actual = resp_get.json().get('result', {}).get('text', '')
-    except Exception:
-        mensaje_actual = ''
+    from datetime import datetime
+    fecha_actual = datetime.now().strftime('%Y-%m-%d')
 
-    # Si no logramos obtener el mensaje, usamos uno genérico
-    if not mensaje_actual:
-        mensaje_actual = f"<b>RECLAMO {_esc(radicado)}</b>"
+    # Reconstruir el mensaje completo con todos los datos del cliente
+    mensaje_completo = (
+        f"📋 <b>RECLAMO Nº {_esc(radicado)}</b>\n"
+        f"Creado el: {fecha_actual}\n"
+        f"{'─' * 40}\n\n"
+        f"<b>👤 CLIENTE</b>\n"
+        f"Nombre: {_esc(nombre_cliente)}\n"
+        f"Documento: {_esc(cedula)}\n"
+        f"Celular: {_esc(telefono)}\n"
+        f"Dirección: [Pendiente CRM]\n"
+        f"Barrio: [Pendiente CRM]\n\n"
+    )
 
-    # Agregar la acción al final
+    # Agregar la acción ejecutada
     acciones = {
         'TECNICO': (
-            f"\n\n{'─' * 40}\n"
             f"<b>✅ ACCIÓN EJECUTADA</b>\n"
             f"🔧 Técnico asignado\n"
             f"Se notificó al cliente que un técnico se desplazará a su vivienda.\n"
             f"Aguardando confirmación de visita."
         ),
         'RESUELTO': (
-            f"\n\n{'─' * 40}\n"
             f"<b>✅ ACCIÓN EJECUTADA</b>\n"
             f"✅ Marcado como resuelto\n"
             f"Se envió mensaje al cliente para verificar si el servicio está funcionando.\n"
@@ -162,7 +169,8 @@ def editar_mensaje_accion(chat_id, message_id, radicado, accion):
         )
     }
 
-    texto_final = mensaje_actual + acciones.get(accion, "\n\n<b>✅ ACCIÓN EJECUTADA</b>")
+    texto_accion = acciones.get(accion, "<b>✅ ACCIÓN EJECUTADA</b>")
+    texto_final = mensaje_completo + f"{'─' * 40}\n\n{texto_accion}"
 
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
 

@@ -434,6 +434,7 @@ def _manejar_confirmacion_resuelto(telefono, mensaje, conv):
                 tipo='URGENTE',
                 radicado=f"VES-REVISITA",
                 nombre_cliente=conv.get('nombre_cliente', 'Cliente'),
+                cedula=conv.get('cedula', 'Pendiente'),
                 telefono=telefono,
                 detalle='Cliente confirmó que el problema NO fue resuelto. Requiere visita técnica.'
             )
@@ -483,13 +484,17 @@ def telegram_webhook():
 
             from telegram_alerts import editar_mensaje_accion, responder_callback
 
-            # Formato callback_data: "ACCION|RADICADO|TELEFONO"
+            # Formato callback_data: "ACCION|RADICADO|TELEFONO|CEDULA|NOMBRE"
             partes = callback_data.split('|')
-            if len(partes) != 3:
+            if len(partes) < 3:
                 responder_callback(callback_id)
                 return jsonify({'ok': True})
 
-            accion, radicado, telefono = partes
+            accion = partes[0]
+            radicado = partes[1]
+            telefono = partes[2]
+            cedula = partes[3] if len(partes) > 3 else 'Pendiente'
+            nombre_cliente = partes[4].replace('_', ' ') if len(partes) > 4 else 'Cliente'
 
             # Confirmar a Telegram que recibimos el callback
             responder_callback(callback_id)
@@ -501,7 +506,7 @@ def telegram_webhook():
                     "En breve le contactaremos para coordinar la visita. 🔧"
                 )
                 enviar_whatsapp_twilio(telefono, mensaje_cliente)
-                editar_mensaje_accion(chat_id, message_id, radicado, 'TECNICO')
+                editar_mensaje_accion(chat_id, message_id, radicado, 'TECNICO', nombre_cliente, cedula, telefono)
 
                 # Actualizar estado del caso
                 try:
@@ -517,7 +522,7 @@ def telegram_webhook():
                     "¿Puede verificar por favor? ✅"
                 )
                 enviar_whatsapp_twilio(telefono, mensaje_cliente)
-                editar_mensaje_accion(chat_id, message_id, radicado, 'RESUELTO')
+                editar_mensaje_accion(chat_id, message_id, radicado, 'RESUELTO', nombre_cliente, cedula, telefono)
 
                 # Poner conversación en modo espera de confirmación
                 try:
