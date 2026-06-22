@@ -409,14 +409,39 @@ def _twiml(mensaje):
 def _manejar_confirmacion_resuelto(telefono, mensaje, conv):
     """
     El cliente respondió después de que sistemas marcó 'RESUELTO'.
-    Si dice que no funciona → SAM envía técnico.
+    Solo procesa si confirma explícitamente SÍ o NO.
+    Si dice que va a revisar, espera confirmación real.
     """
-    mensaje_lower = mensaje.lower()
+    mensaje_lower = mensaje.lower().strip()
+
+    # Palabras positivas = servicio funciona
+    palabras_positivas = ['si', 'sí', 'yes', 'ok', 'okay', 'funciona', 'funciono',
+                         'perfecto', 'excelente', 'bien', 'bien!', 'ya', 'listo',
+                         'claro', 'claro que si', 'claro que sí', 'que bueno', 'qué bueno']
+
+    # Palabras negativas = servicio NO funciona
     palabras_negativas = ['no', 'nope', 'sigue', 'todavia', 'todavía',
                           'aun', 'aún', 'igual', 'mismo', 'problema',
-                          'falla', 'malo', 'mal', 'sin', 'nada']
+                          'falla', 'fallo', 'malo', 'mal', 'sin', 'nada',
+                          'sigue sin', 'no funciona', 'no funciono', 'no sirve']
 
+    # Palabras de revisión = cliente va a verificar, NO responde aún
+    palabras_revision = ['momento', 'reviso', 'reviso', 'valido', 'válido', 'verifico',
+                        'verificar', 'chequeo', 'chequear', 'revisar', 'déjame ver',
+                        'espera', 'espere', 'un momento', 'un segundo', 'un minuto']
+
+    es_positivo = any(p in mensaje_lower for p in palabras_positivas)
     es_negativo = any(p in mensaje_lower for p in palabras_negativas)
+    es_revision = any(p in mensaje_lower for p in palabras_revision)
+
+    # Si está diciendo que va a revisar, esperar confirmación real
+    if es_revision and not es_positivo and not es_negativo:
+        respuesta = (
+            "Perfecto, tómate el tiempo que necesites. "
+            "Avísame cuando hayas verificado si el servicio funciona correctamente. 👍"
+        )
+        # Mantener en modo esperando confirmación
+        return _twiml(respuesta)
 
     if es_negativo:
         respuesta = (
@@ -439,14 +464,24 @@ def _manejar_confirmacion_resuelto(telefono, mensaje, conv):
                 detalle='Cliente confirmó que el problema NO fue resuelto. Requiere visita técnica.'
             )
         except Exception as e:
-            print(f"No se pudo enviar alerta: {e}")
-    else:
+            log.warning(f"No se pudo enviar alerta a Telegram: {e}")
+
+    elif es_positivo:
         respuesta = (
             "¡Perfecto! Me alegra que el servicio esté funcionando correctamente. "
             "Si en algún momento necesita ayuda, no dude en escribirnos. "
             "¡Que tenga un excelente día! 😊"
         )
         db.actualizar_conversacion(conv['id'], modo='automatico')
+
+    else:
+        # Respuesta por defecto si el mensaje no es claro
+        respuesta = (
+            "Disculpa, no capté bien tu respuesta. "
+            "¿El servicio está funcionando correctamente? (responde 'sí' o 'no')"
+        )
+        # Mantener esperando confirmación
+        return _twiml(respuesta)
 
     return _twiml(respuesta)
 
