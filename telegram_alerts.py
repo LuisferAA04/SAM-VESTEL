@@ -126,35 +126,50 @@ def enviar_alerta(tipo, radicado, nombre_cliente, telefono, detalle):
 
 def editar_mensaje_accion(chat_id, message_id, radicado, accion):
     """
-    Edita el mensaje en Telegram para reflejar la acción tomada
-    y elimina los botones para evitar doble clic
+    Edita el mensaje en Telegram agregando la acción tomada al final
+    y elimina los botones. Mantiene toda la información original del reclamo.
     """
     if not TELEGRAM_BOT_TOKEN:
         return False
 
-    textos = {
-        'TECNICO':  (
-            f"🔧 <b>RECLAMO {_esc(radicado)}</b>\n"
-            f"Estado: ✅ TÉCNICO ASIGNADO\n\n"
+    # Obtener el mensaje actual para preservar su contenido
+    url_get = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getMessage"
+    try:
+        resp_get = requests.post(url_get, json={'chat_id': chat_id, 'message_id': message_id}, timeout=10)
+        mensaje_actual = resp_get.json().get('result', {}).get('text', '')
+    except Exception:
+        mensaje_actual = ''
+
+    # Si no logramos obtener el mensaje, usamos uno genérico
+    if not mensaje_actual:
+        mensaje_actual = f"<b>RECLAMO {_esc(radicado)}</b>"
+
+    # Agregar la acción al final
+    acciones = {
+        'TECNICO': (
+            f"\n\n{'─' * 40}\n"
+            f"<b>✅ ACCIÓN EJECUTADA</b>\n"
+            f"🔧 Técnico asignado\n"
             f"Se notificó al cliente que un técnico se desplazará a su vivienda.\n"
             f"Aguardando confirmación de visita."
         ),
         'RESUELTO': (
-            f"✅ <b>RECLAMO {_esc(radicado)}</b>\n"
-            f"Estado: ⏳ ESPERANDO CONFIRMACIÓN\n\n"
+            f"\n\n{'─' * 40}\n"
+            f"<b>✅ ACCIÓN EJECUTADA</b>\n"
+            f"✅ Marcado como resuelto\n"
             f"Se envió mensaje al cliente para verificar si el servicio está funcionando.\n"
-            f"Aguardando respuesta..."
+            f"Aguardando confirmación del cliente..."
         )
     }
 
-    texto = textos.get(accion, f"<b>{_esc(radicado)}</b> — Acción registrada.")
+    texto_final = mensaje_actual + acciones.get(accion, "\n\n<b>✅ ACCIÓN EJECUTADA</b>")
 
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
 
     data = {
         'chat_id': chat_id,
         'message_id': message_id,
-        'text': texto,
+        'text': texto_final,
         'parse_mode': 'HTML'
     }
 
