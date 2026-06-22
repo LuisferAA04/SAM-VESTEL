@@ -21,9 +21,15 @@ from twilio.request_validator import RequestValidator
 from twilio.twiml.messaging_response import MessagingResponse
 from agent_sam import AgenteSAM
 from database import Database, insertar_datos_prueba
+from logging_config import setup_logging, get_logger
 from datetime import datetime
 import tempfile
 import requests as http_requests
+import logging
+
+# Configurar logging global
+setup_logging()
+log = get_logger(__name__)
 
 # Cargar variables de entorno
 load_dotenv()
@@ -41,9 +47,9 @@ db      = Database()
 # Insertar datos de prueba si la BD está vacía
 insertar_datos_prueba()
 
-print("\n" + "="*60)
-print("🤖 SAM - VESTEL | Sistema de Atención al Cliente")
-print("="*60)
+log.info("=" * 60)
+log.info("🤖 SAM - VESTEL | Sistema de Atención al Cliente")
+log.info("=" * 60)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -64,7 +70,7 @@ def validar_twilio(func):
     def wrapper(*args, **kwargs):
         auth_token = os.getenv('TWILIO_AUTH_TOKEN')
         if not auth_token:
-            print("⚠️ TWILIO_AUTH_TOKEN no configurado: no se puede validar la firma del webhook")
+            log.error("⚠️ TWILIO_AUTH_TOKEN no configurado: no se puede validar la firma del webhook")
             abort(503)
 
         # URL pública real (Twilio firma sobre la URL exacta que invocó).
@@ -76,7 +82,7 @@ def validar_twilio(func):
 
         signature = request.headers.get('X-Twilio-Signature', '')
         if not _twilio_validator.validate(url, request.form.to_dict(), signature):
-            print("❌ Firma de Twilio inválida — petición rechazada")
+            log.warning("❌ Firma de Twilio inválida — petición rechazada")
             abort(403)
 
         return func(*args, **kwargs)
@@ -267,7 +273,7 @@ def enviar_whatsapp_twilio(telefono, mensaje):
     from_number = os.getenv('TWILIO_WHATSAPP_NUMBER', 'whatsapp:+14155238886')
 
     if not account_sid or not auth_token:
-        print("⚠️ Twilio no configurado en .env")
+        log.error("⚠️ Twilio no configurado en .env")
         return False
 
     try:
@@ -277,10 +283,10 @@ def enviar_whatsapp_twilio(telefono, mensaje):
             from_=from_number,
             to=f'whatsapp:{telefono}'
         )
-        print(f"✅ Mensaje enviado a {telefono}: {mensaje}")
+        log.info(f"✅ Mensaje enviado a {telefono}: {mensaje}")
         return True
     except Exception as e:
-        print(f"❌ Error Twilio: {str(e)}")
+        log.error(f"❌ Error Twilio: {str(e)}")
         return False
 
 
@@ -295,7 +301,7 @@ def _transcribir_audio_twilio(media_url):
     try:
         resp = http_requests.get(media_url, auth=(account_sid, auth_token), timeout=30)
         if resp.status_code != 200:
-            print(f"❌ No se pudo descargar audio: HTTP {resp.status_code}")
+            log.error(f"❌ No se pudo descargar audio: HTTP {resp.status_code}")
             return None
 
         content_type = resp.headers.get('Content-Type', '')
@@ -324,11 +330,11 @@ def _transcribir_audio_twilio(media_url):
 
         os.unlink(tmp_path)
         texto = transcripcion.text.strip()
-        print(f"🎙️ Audio transcrito: {texto}")
+        log.info(f"🎙️ Audio transcrito: {texto}")
         return texto
 
     except Exception as e:
-        print(f"❌ Error transcribiendo audio: {e}")
+        log.error(f"❌ Error transcribiendo audio: {e}")
         try:
             os.unlink(tmp_path)
         except Exception:
@@ -370,7 +376,7 @@ def api_whatsapp():
             return '', 400
 
         tipo_msg = "🎙️ Audio" if audio_transcrito else "📱 Texto"
-        print(f"{tipo_msg} WhatsApp de {from_number}: {message_body}")
+        log.info(f"{tipo_msg} WhatsApp de {from_number}: {message_body}")
 
         # Verificar si el cliente está esperando confirmación de "resuelto"
         conv = db.obtener_conversacion(from_number)
@@ -385,11 +391,11 @@ def api_whatsapp():
         resultado = agente.procesar_mensaje(from_number, mensaje_para_sam)
         respuesta_texto = resultado.get('respuesta_limpia', resultado['respuesta'])
 
-        print(f"🤖 SAM responde: {respuesta_texto}")
+        log.info(f"🤖 SAM responde: {respuesta_texto}")
         return _twiml(respuesta_texto)
 
     except Exception as e:
-        print(f"❌ Error WhatsApp: {str(e)}")
+        log.error(f"❌ Error WhatsApp: {str(e)}", exc_info=True)
         return '', 500
 
 
@@ -459,7 +465,7 @@ def telegram_webhook():
         if TELEGRAM_WEBHOOK_SECRET:
             recibido = request.headers.get('X-Telegram-Bot-Api-Secret-Token', '')
             if recibido != TELEGRAM_WEBHOOK_SECRET:
-                print("❌ Token secreto de Telegram inválido — petición rechazada")
+                log.warning("❌ Token secreto de Telegram inválido — petición rechazada")
                 abort(403)
 
         data = request.get_json()
@@ -524,7 +530,7 @@ def telegram_webhook():
         return jsonify({'ok': True})
 
     except Exception as e:
-        print(f"❌ Error webhook Telegram: {str(e)}")
+        log.error(f"❌ Error webhook Telegram: {str(e)}", exc_info=True)
         return jsonify({'ok': True})
 
 
@@ -537,11 +543,11 @@ if __name__ == '__main__':
     host  = os.getenv('FLASK_HOST', '0.0.0.0')
     debug = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
 
-    print(f"\n✅ Servidor iniciado en: http://localhost:{port}")
-    print(f"✅ Dashboard: http://localhost:{port}")
-    print(f"✅ API REST:  http://localhost:{port}/api/")
-    print(f"✅ Telegram webhook: http://localhost:{port}/api/telegram-webhook")
-    print("\n💡 Presiona Ctrl+C para detener\n")
-    print("="*60 + "\n")
+    log.info(f"✅ Servidor iniciado en: http://localhost:{port}")
+    log.info(f"✅ Dashboard: http://localhost:{port}")
+    log.info(f"✅ API REST:  http://localhost:{port}/api/")
+    log.info(f"✅ Telegram webhook: http://localhost:{port}/api/telegram-webhook")
+    log.info("💡 Presiona Ctrl+C para detener")
+    log.info("=" * 60)
 
     app.run(host=host, port=port, debug=debug)

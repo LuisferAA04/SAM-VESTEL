@@ -5,10 +5,13 @@ Envía notificaciones al grupo de sistemas con opciones: IR TÉCNICO / RESUELTO
 
 import os
 import html
+import logging
 import requests
 from dotenv import load_dotenv
+from logging_config import get_logger
 
 load_dotenv()
+log = get_logger(__name__)
 
 
 def _esc(texto):
@@ -32,7 +35,7 @@ def enviar_alerta(tipo, radicado, nombre_cliente, telefono, detalle):
     """
 
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("⚠️ Telegram no configurado")
+        log.warning("⚠️ Telegram no configurado")
         return False
 
     emojis = {
@@ -95,14 +98,14 @@ def enviar_alerta(tipo, radicado, nombre_cliente, telefono, detalle):
         response = requests.post(url, json=data, timeout=10)
 
         if response.status_code == 200:
-            print(f"✅ Alerta enviada a Telegram: {radicado}")
+            log.info(f"✅ Alerta enviada a Telegram: {radicado}")
             return True
         else:
-            print(f"❌ Error Telegram: {response.text}")
+            log.error(f"❌ Error Telegram: {response.text}")
             return False
 
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        log.error(f"❌ Error enviando alerta a Telegram: {str(e)}")
         return False
 
 
@@ -134,7 +137,7 @@ def editar_mensaje_accion(chat_id, message_id, radicado, accion):
         response = requests.post(url, json=data, timeout=10)
         return response.status_code == 200
     except Exception as e:
-        print(f"❌ Error editando mensaje: {str(e)}")
+        log.error(f"❌ Error editando mensaje en Telegram: {str(e)}")
         return False
 
 

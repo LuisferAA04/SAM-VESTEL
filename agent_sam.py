@@ -7,9 +7,15 @@ import os
 import re
 import json
 import random
+import logging
+import time
 from openai import OpenAI
+from openai import APIError, RateLimitError, APIConnectionError, APITimeoutError
 from datetime import datetime
 from database import Database
+from logging_config import get_logger
+
+log = get_logger(__name__)
 
 
 # Herramienta que el modelo invoca para registrar un caso. El servidor genera el
@@ -80,6 +86,43 @@ INSTRUCCION_TOOL = (
 )
 
 
+def _llamar_openai_con_reintentos(func, max_reintentos=3, timeout_inicial=2):
+    """
+    Wrapper que ejecuta una función OpenAI con reintentos exponenciales.
+    Reintenta si falla por rate limit, timeout o error de conexión.
+
+    Args:
+        func: callable que hace la llamada a OpenAI (debe lanzar excepción si falla)
+        max_reintentos: número máximo de reintentos
+        timeout_inicial: segundos iniciales de espera (se duplica cada reintento)
+
+    Returns:
+        Resultado de la función si tiene éxito
+
+    Raises:
+        APIError: si falla después de agotar reintentos
+    """
+    for intento in range(max_reintentos):
+        try:
+            return func()
+        except (RateLimitError, APITimeoutError, APIConnectionError) as e:
+            if intento < max_reintentos - 1:
+                espera = timeout_inicial * (2 ** intento)
+                log.warning(
+                    f"OpenAI error (intento {intento + 1}/{max_reintentos}): {type(e).__name__}. "
+                    f"Reintentando en {espera}s..."
+                )
+                time.sleep(espera)
+            else:
+                log.error(
+                    f"OpenAI falló después de {max_reintentos} reintentos: {str(e)}"
+                )
+                raise
+        except APIError as e:
+            log.error(f"OpenAI error fatal (no reintentable): {str(e)}")
+            raise
+
+
 class AgenteSAM:
     def __init__(self, api_key, model="gpt-4o"):
         self.client = OpenAI(api_key=api_key)
@@ -91,7 +134,7 @@ class AgenteSAM:
         # nuevo. En producción (flag en false) sí recuerda al cliente y lo saluda por nombre.
         self.modo_pruebas = os.getenv('MODO_PRUEBAS', 'false').strip().lower() in ('true', '1', 'si', 'sí')
         if self.modo_pruebas:
-            print("🧪 MODO_PRUEBAS activo: no se reconocen números recurrentes (siempre se valida la cédula).")
+            log.warning("🧪 MODO_PRUEBAS activo: no se reconocen números recurrentes (siempre se valida la cédula).")
 
         prompt_path = os.path.join(os.path.dirname(__file__), 'PROMPT_SAM_DEFINITIVO.md')
         if os.path.exists(prompt_path):
@@ -219,7 +262,7 @@ FORMATO SALIDA:
                 # refrescar la copia local
                 conv['cedula'] = cedula
                 conv['nombre_cliente'] = usuario['nombre']
-                print(f"✅ Cédula {cedula} validada → {usuario['nombre']}")
+                log.info(f"✅ Cédula {cedula} validada → {usuario['nombre']}")
                 return conv
         return conv
 
@@ -325,9 +368,9 @@ FORMATO SALIDA:
                 detalle=descripcion,
             )
         except Exception as e:
-            print(f"No se pudo enviar alerta: {e}")
+            log.warning(f"No se pudo enviar alerta a Telegram: {e}")
 
-        print(f"📝 Caso creado vía tool: {radicado} ({servicio}) escalado={requiere_esc}")
+        log.info(f"📝 Caso creado vía tool: {radicado} ({servicio}) escalado={requiere_esc}")
         return {"radicado": radicado, "estado": "creado", "escalado": requiere_esc}
 
     def procesar_mensaje(self, telefono, mensaje, conversacion_id=None):
@@ -344,7 +387,7 @@ FORMATO SALIDA:
                 )
                 self.db.guardar_mensaje(conv['id'], 'texto', respuesta_cierre, 'sam')
                 self.db.actualizar_conversacion(conv['id'], estado='cerrado')
-                print("🧪 MODO_PRUEBAS: sesión cerrada por despedida. Próximo mensaje = cliente nuevo.")
+                log.info("🧪 MODO_PRUEBAS: sesión cerrada por despedida. Próximo mensaje = cliente nuevo.")
                 return {
                     'exito': True,
                     'respuesta': respuesta_cierre,
@@ -362,7 +405,7 @@ FORMATO SALIDA:
             if self.modo_pruebas and conv and self._es_saludo(mensaje):
                 self.db.actualizar_conversacion(conv['id'], estado='cerrado')
                 conversacion_id = self.db.crear_conversacion(telefono)
-                print("🧪 MODO_PRUEBAS: nueva sesión (cliente tratado como nuevo).")
+                log.info("🧪 MODO_PRUEBAS: nueva sesión (cliente tratado como nuevo).")
             elif conv:
                 conversacion_id = conv['id']
             else:
@@ -412,15 +455,17 @@ FORMATO SALIDA:
         mensajes_gpt.append({"role": "user", "content": mensaje})
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=mensajes_gpt,
-                tools=TOOLS,
-                tool_choice="auto",
-                temperature=0.4,
-                max_tokens=500
-            )
+            def _llamada_principal():
+                return self.client.chat.completions.create(
+                    model=self.model,
+                    messages=mensajes_gpt,
+                    tools=TOOLS,
+                    tool_choice="auto",
+                    temperature=0.4,
+                    max_tokens=500
+                )
 
+            response = _llamar_openai_con_reintentos(_llamada_principal, max_reintentos=3)
             msg_modelo = response.choices[0].message
             tokens_usados = response.usage.total_tokens
 
@@ -468,14 +513,17 @@ FORMATO SALIDA:
                     })
 
                 # Segunda llamada: el modelo redacta la respuesta usando el radicado real
-                response2 = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=mensajes_gpt,
-                    tools=TOOLS,
-                    tool_choice="auto",
-                    temperature=0.4,
-                    max_tokens=500
-                )
+                def _llamada_secundaria():
+                    return self.client.chat.completions.create(
+                        model=self.model,
+                        messages=mensajes_gpt,
+                        tools=TOOLS,
+                        tool_choice="auto",
+                        temperature=0.4,
+                        max_tokens=500
+                    )
+
+                response2 = _llamar_openai_con_reintentos(_llamada_secundaria, max_reintentos=3)
                 msg_modelo = response2.choices[0].message
                 tokens_usados += response2.usage.total_tokens
 
@@ -503,10 +551,42 @@ FORMATO SALIDA:
                 'conversacion_id': conversacion_id,
                 **resultado
             }
-            
+
+        except (RateLimitError, APITimeoutError, APIConnectionError) as e:
+            log.error(f"Error OpenAI después de reintentos: {type(e).__name__}: {str(e)}")
+            respuesta_error = "Perdón, acabo de perder la conexión. ¿Podrías repetir tu pregunta?"
+            self.db.guardar_mensaje(
+                conversacion_id=conversacion_id,
+                tipo='error',
+                contenido=respuesta_error,
+                remitente='sam'
+            )
+            return {
+                'exito': False,
+                'respuesta': respuesta_error,
+                'tokens_usados': 0,
+                'conversacion_id': conversacion_id,
+                'error': f"OpenAI timeout/connection after retries: {str(e)}"
+            }
+        except APIError as e:
+            log.error(f"Error OpenAI fatal: {str(e)}", exc_info=True)
+            respuesta_error = "Disculpa, no capté bien lo que me dijiste. ¿Podrías reformular tu pregunta?"
+            self.db.guardar_mensaje(
+                conversacion_id=conversacion_id,
+                tipo='error',
+                contenido=respuesta_error,
+                remitente='sam'
+            )
+            return {
+                'exito': False,
+                'respuesta': respuesta_error,
+                'tokens_usados': 0,
+                'conversacion_id': conversacion_id,
+                'error': f"OpenAI API error: {str(e)}"
+            }
         except Exception as e:
-            print(f"Error: {str(e)}")
-            respuesta_error = "Disculpa, tengo problemas técnicos."
+            log.error(f"Error inesperado en procesar_mensaje: {str(e)}", exc_info=True)
+            respuesta_error = "Déjame ver si entendí bien tu solicitud. ¿Podrías darme más detalles?"
             self.db.guardar_mensaje(
                 conversacion_id=conversacion_id,
                 tipo='error',
@@ -578,7 +658,7 @@ FORMATO SALIDA:
                             detalle=mensaje_usuario
                         )
                     except Exception as e:
-                        print(f"No se pudo enviar alerta: {e}")
+                        log.warning(f"No se pudo enviar alerta a Telegram: {e}")
 
         respuesta_limpia = respuesta
         if '###DATOS###' in respuesta_limpia:
