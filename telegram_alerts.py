@@ -59,14 +59,27 @@ def enviar_alerta(tipo, radicado, nombre_cliente, telefono, detalle):
     }
 
     emoji = emojis.get(tipo, '🚨')
+    from datetime import datetime
+    fecha_actual = datetime.now().strftime('%Y-%m-%d')
 
     mensaje = (
-        f"{emoji} <b>NUEVO CASO {_esc(radicado)}</b>\n\n"
-        f"👤 <b>Cliente:</b> {_esc(nombre_cliente)}\n"
-        f"📱 <b>Teléfono:</b> {_esc(telefono)}\n"
-        f"🔴 <b>Tipo:</b> {_esc(tipo)}\n"
-        f"⚠️ <b>Detalle:</b> {_esc(detalle)}\n\n"
-        f"<i>Selecciona una acción:</i>"
+        f"{emoji} <b>RECLAMO Nº {_esc(radicado)}</b>\n"
+        f"Creado el: {fecha_actual}\n"
+        f"{'─' * 40}\n\n"
+        f"<b>👤 CLIENTE</b>\n"
+        f"Nombre: {_esc(nombre_cliente)}\n"
+        f"Documento: {_esc(nombre_cliente)}  [Pendiente validación CRM]\n"
+        f"Celular: {_esc(telefono)}\n"
+        f"Dirección: [Pendiente CRM]\n"
+        f"Barrio: [Pendiente CRM]\n\n"
+        f"<b>📦 CASO</b>\n"
+        f"Estado: Pendiente Revisión\n"
+        f"Tipo: {_esc(tipo)}\n"
+        f"Servicios: [Pendiente CRM]\n\n"
+        f"<b>⚠️ DESCRIPCIÓN</b>\n"
+        f"{_esc(detalle)}\n\n"
+        f"{'─' * 40}\n"
+        f"<i>¿Qué acción tomar?</i>"
     )
 
     # Botones inline — callback_data lleva radicado y telefono separados por |
@@ -74,11 +87,13 @@ def enviar_alerta(tipo, radicado, nombre_cliente, telefono, detalle):
         "inline_keyboard": [
             [
                 {
-                    "text": "🔧 IR TÉCNICO",
+                    "text": "🔧 ENVIAR TÉCNICO",
                     "callback_data": f"TECNICO|{radicado}|{telefono}"
-                },
+                }
+            ],
+            [
                 {
-                    "text": "✅ RESUELTO",
+                    "text": "✅ MARCAR RESUELTO",
                     "callback_data": f"RESUELTO|{radicado}|{telefono}"
                 }
             ]
@@ -118,8 +133,18 @@ def editar_mensaje_accion(chat_id, message_id, radicado, accion):
         return False
 
     textos = {
-        'TECNICO':  f"🔧 <b>{_esc(radicado)}</b> — Técnico asignado. Se notificó al cliente.",
-        'RESUELTO': f"✅ <b>{_esc(radicado)}</b> — Marcado como resuelto. Esperando confirmación del cliente."
+        'TECNICO':  (
+            f"🔧 <b>RECLAMO {_esc(radicado)}</b>\n"
+            f"Estado: ✅ TÉCNICO ASIGNADO\n\n"
+            f"Se notificó al cliente que un técnico se desplazará a su vivienda.\n"
+            f"Aguardando confirmación de visita."
+        ),
+        'RESUELTO': (
+            f"✅ <b>RECLAMO {_esc(radicado)}</b>\n"
+            f"Estado: ⏳ ESPERANDO CONFIRMACIÓN\n\n"
+            f"Se envió mensaje al cliente para verificar si el servicio está funcionando.\n"
+            f"Aguardando respuesta..."
+        )
     }
 
     texto = textos.get(accion, f"<b>{_esc(radicado)}</b> — Acción registrada.")
